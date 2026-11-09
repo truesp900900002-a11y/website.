@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>...</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000000;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: 'Tahoma', sans-serif;
+            user-select: none;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .hint-text {
+            position: absolute;
+            bottom: 40px;
+            color: #c084fc;
+            font-size: 16px;
+            z-index: 10;
+            letter-spacing: 1px;
+            opacity: 0.8;
+            pointer-events: none;
+            animation: pulseText 2s infinite ease-in-out;
+        }
+
+        @keyframes pulseText {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+    <div class="hint-text">(กดตรงไหนก็ได้นะ)</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        const N = 500;
+        const stars = [];
+        const burstParticles = [];
+
+        let frame = 0;
+        const steps = 120; // ความเร็วในการลอยมารวมเป็นหัวใจ
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // คำนวณพิกัดหัวใจ
+        function getHeartPoint(t) {
+            const x = 16 * Math.pow(Math.sin(t), 3);
+            const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+            return { x, y };
+        }
+
+        // สร้างตำแหน่งดาว
+        function initStars() {
+            stars.length = 0;
+            const scale = Math.min(width, height) / 45;
+
+            for (let i = 0; i < N; i++) {
+                const a = 2 * Math.PI * (i / N);
+                const hp = getHeartPoint(a);
+
+                const tx = hp.x * scale + (Math.random() * 30 - 15);
+                const ty = hp.y * scale + (Math.random() * 30 - 15);
+
+                const sx = (Math.random() - 0.5) * width;
+                const sy = (Math.random() - 0.5) * height;
+
+                const size = Math.random() * 3 + 2.5;
+
+                stars.push({ sx, sy, tx, ty, size });
+            }
+        }
+        initStars();
+
+        // วาดดาวระยิบระยับแบบ 8 แฉก
+        function drawStar(x, y, size, opacity) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.strokeStyle = `rgba(168, 85, 247, ${opacity})`;
+            ctx.lineWidth = 1.2;
+            ctx.shadowColor = '#c084fc';
+            ctx.shadowBlur = 10;
+
+            const angles = [0, 45, 90, 135];
+            for (let angle of angles) {
+                const rad = (angle * Math.PI) / 180;
+                const dx = size * Math.cos(rad);
+                const dy = size * Math.sin(rad);
+
+                ctx.beginPath();
+                ctx.moveTo(-dx, -dy);
+                ctx.lineTo(dx, dy);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        // เอฟเฟกต์กดกระจาย
+        class BurstParticle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 12 + 8;
+                this.vx = (Math.random() - 0.5) * 6;
+                this.vy = (Math.random() - 0.5) * 6;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.02 + 0.015;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.font = `${this.size}px sans-serif`;
+                ctx.fillText('💖', this.x, this.y);
+                ctx.restore();
+            }
+        }
+
+        function createBurst(x, y) {
+            for (let i = 0; i < 12; i++) {
+                burstParticles.push(new BurstParticle(x, y));
+            }
+        }
+
+        window.addEventListener('click', (e) => createBurst(e.clientX, e.clientY));
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) {
+                createBurst(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        });
+
+        function animate() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(0, 0, width, height);
+
+            const cx = width / 2;
+            const cy = height / 2;
+
+            if (frame < steps) frame++;
+
+            const progress = frame / steps;
+            const eased = Math.sin((progress * Math.PI) / 2);
+
+            // วาดดาวลอยมารวมกัน
+            for (let star of stars) {
+                const curX = cx + star.sx + (star.tx - star.sx) * eased;
+                const curY = cy + star.sy + (star.ty - star.sy) * eased;
+                drawStar(curX, curY, star.size, 0.85);
+            }
+
+            // แสดงข้อความเมื่อดาวมารวมกันเกือบสมบูรณ์
+            if (progress > 0.6) {
+                const textAlpha = Math.min(1, (progress - 0.6) / 0.4);
+                ctx.save();
+                ctx.globalAlpha = textAlpha;
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = '#e9d5ff';
+                ctx.shadowBlur = 15;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const fontSize = Math.max(24, Math.min(width, height) / 16);
+                ctx.font = `bold ${fontSize}px Tahoma, sans-serif`;
+                ctx.fillText('คนสวย 💖', cx, cy);
+                ctx.restore();
+            }
+
+            // อัปเดตเอฟเฟกต์กด
+            for (let i = burstParticles.length - 1; i >= 0; i--) {
+                burstParticles[i].update();
+                burstParticles[i].draw();
+                if (burstParticles[i].alpha <= 0) burstParticles.splice(i, 1);
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
